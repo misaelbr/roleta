@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roleta da Sorte - Gerenciador de Estoque</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            900: '#0f172a',
+                            800: '#1e293b',
+                            700: '#334155',
+                        },
+                        accent: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+        
+        .pointer-triangle {
+            width: 0; 
+            height: 0; 
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #ef4444;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="bg-dark-900 text-slate-200 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-dark-800 border-b border-dark-700 p-6 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-accent-500 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Roleta da Sorte
+            </h1>
+            <button onclick="resetData()" class="text-xs text-slate-500 hover:text-red-400 transition">Limpar Dados</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow container mx-auto p-4 lg:p-8 flex flex-col lg:flex-row gap-8">
+        
+        <!-- Left Column: The Wheel -->
+        <div class="w-full lg:w-7/12 flex flex-col items-center justify-center bg-dark-800 rounded-2xl p-6 shadow-xl border border-dark-700 relative overflow-hidden">
+            
+            <div class="relative group">
+                <!-- Pointer -->
+                <div class="absolute top-0 left-1/2 -translate-x-1/2 -mt-2 pointer-triangle"></div>
+                
+                <!-- Canvas -->
+                <canvas id="wheelCanvas" width="500" height="500" class="max-w-full h-auto rounded-full shadow-2xl border-4 border-dark-700 transition-transform duration-100"></canvas>
+                
+                <!-- Center Hub -->
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 bg-dark-900 rounded-full border-4 border-accent-500 shadow-lg flex items-center justify-center z-10">
+                    <span class="text-accent-500 font-bold text-xl">★</span>
+                </div>
+            </div>
+
+            <div class="mt-8 flex flex-col items-center gap-4 w-full max-w-md">
+                <button id="spinBtn" class="w-full py-4 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-xl shadow-lg transform transition hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed text-lg tracking-wide">
+                    GIRAR ROLETA
+                </button>
+                <div id="statusMessage" class="h-6 text-sm text-slate-400 font-medium"></div>
+            </div>
+        </div>
+
+        <!-- Right Column: Controls & Data -->
+        <div class="w-full lg:w-5/12 flex flex-col gap-6">
+            
+            <!-- Form -->
+            <div class="bg-dark-800 rounded-2xl p-6 shadow-xl border border-dark-700">
+                <h2 class="text-xl font-semibold mb-4 text-slate-100 border-b border-dark-700 pb-2">Adicionar Produto</h2>
+                <form id="productForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-400 mb-1">Nome do Produto</label>
+                        <input type="text" id="prodName" required class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 focus:outline-none focus:border-accent-500 transition text-slate-200" placeholder="Ex: iPhone 15">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-400 mb-1">Quantidade</label>
+                            <input type="number" id="prodQty" min="1" required class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 focus:outline-none focus:border-accent-500 transition text-slate-200" placeholder="10">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-400 mb-1">Chance (%)</label>
+                            <input type="number" id="prodChance" min="1" max="100" required class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 focus:outline-none focus:border-accent-500 transition text-slate-200" placeholder="25">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition">
+                        Adicionar à Lista
+                    </button>
+                </form>
+            </div>
+
+            <!-- List -->
+            <div class="bg-dark-800 rounded-2xl p-6 shadow-xl border border-dark-700 flex-grow flex flex-col">
+                <div class="flex justify-between items-center mb-4 border-b border-dark-700 pb-2">
+                    <h2 class="text-xl font-semibold text-slate-100">Produtos Cadastrados</h2>
+                    <span id="totalChance" class="text-xs font-mono bg-dark-900 px-2 py-1 rounded text-slate-400">Total: 0%</span>
+                </div>
+                
+                <div class="overflow-y-auto flex-grow max-h-[300px] pr-2" id="productList">
+                    <!-- Items will be injected here -->
+                    <div class="text-center text-slate-500 py-8 italic">Nenhum produto cadastrado.</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal Result -->
+    <div id="resultModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50 opacity-0 transition-opacity duration-300">
+        <div class="bg-dark-800 border border-dark-700 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center transform scale-90 transition-transform duration-300" id="modalContent">
+            <div class="w-20 h-20 bg-accent-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span class="text-4xl">🎉</span>
+            </div>
+            <h3 class="text-2xl font-bold text-white mb-2">Sorteado!</h3>
+            <p id="winnerName" class="text-xl text-accent-500 font-semibold mb-4">Nome do Produto</p>
+            <p class="text-slate-400 text-sm mb-6">O estoque foi atualizado automaticamente.</p>
+            <button onclick="closeModal()" class="px-6 py-2 bg-white text-dark-900 font-bold rounded-lg hover:bg-slate-200 transition">
+                Continuar
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- Storage Management ---
+        const STORAGE_KEY = 'roleta_produtos_v1';
+
+        // --- State Management ---
+        let products = [];
+        let isSpinning = false;
+        
+        // Colors for wheel segments (Soft/Dark palette)
+        const colors = [
+            '#3b82f6', // Blue
+            '#8b5cf6', // Violet
+            '#ec4899', // Pink
+            '#10b981', // Emerald
+            '#f59e0b', // Amber
+            '#6366f1', // Indigo
+            '#14b8a6', // Teal
+            '#f43f5e'  // Rose
+        ];
+
+        // --- Initialization ---
+        window.onload = () => {
+            loadData();
+            drawWheel();
+            updateUI();
+        };
+
+        function loadData() {
+            const data = localStorage.getItem(STORAGE_KEY);
+            if (data) {
+                try {
+                    products = JSON.parse(data);
+                } catch (e) {
+                    console.error("Erro ao ler dados", e);
+                    products = [];
+                }
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+            updateUI();
+            drawWheel();
+        }
+
+        function resetData() {
+            if(confirm('Tem certeza que deseja limpar todos os produtos?')) {
+                products = [];
+                saveData();
+            }
+        }
+
+        // --- UI Updates ---
+        function updateUI() {
+            const list = document.getElementById('productList');
+            const totalChanceEl = document.getElementById('totalChance');
+            
+            list.innerHTML = '';
+            
+            let totalChance = 0;
+
+            if (products.length === 0) {
+                list.innerHTML = '<div class="text-center text-slate-500 py-8 italic">Nenhum produto cadastrado.</div>';
+            } else {
+                products.forEach((p, index) => {
+                    // Only count chance if stock > 0
+                    if (p.qty > 0) totalChance += p.chance;
+
+                    const item = document.createElement('div');
+                    item.className = `flex justify-between items-center bg-dark-900 p-3 rounded-lg mb-2 border border-dark-700 ${p.qty === 0 ? 'opacity-50 grayscale' : ''}`;
+                    item.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="w-3 h-3 rounded-full" style="background-color: ${colors[index % colors.length]}"></div>
+                            <div>
+                                <div class="font-medium text-slate-200">${p.name}</div>
+                                <div class="text-xs text-slate-500">Estoque: ${p.qty}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm font-mono text-accent-500">${p.chance}%</span>
+                            <button onclick="removeProduct(${index})" class="text-slate-600 hover:text-red-500 transition">
+                                &times;
+                            </button>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+            }
+
+            totalChanceEl.innerText = `Total: ${totalChance}%`;
+            totalChanceEl.className = `text-xs font-mono px-2 py-1 rounded ${totalChance > 100 ? 'bg-red-900 text-red-200' : 'bg-dark-900 text-slate-400'}`;
+            
+            // Disable spin if no products with stock
+            const hasStock = products.some(p => p.qty > 0);
+            document.getElementById('spinBtn').disabled = !hasStock || isSpinning;
+        }
+
+        // --- Form Handling ---
+        document.getElementById('productForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = document.getElementById('prodName').value;
+            const qty = parseInt(document.getElementById('prodQty').value);
+            const chance = parseFloat(document.getElementById('prodChance').value);
+
+            if (name && qty > 0 && chance > 0) {
+                products.push({ name, qty, chance });
+                saveData();
+                e.target.reset();
+            }
+        });
+
+        function removeProduct(index) {
+            if (isSpinning) return;
+            products.splice(index, 1);
+            saveData();
+        }
+
+        // --- Wheel Logic ---
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        let currentRotation = 0; // Current rotation angle in radians
+
+        function drawWheel() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = canvas.width / 2 - 10; // Padding
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Filter active products (stock > 0)
+            const activeProducts = products.filter(p => p.qty > 0);
+            
+            if (activeProducts.length === 0) {
+                // Draw empty wheel
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = '#1e293b';
+                ctx.fill();
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = '#64748b';
+                ctx.font = '20px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Adicione Produtos', centerX, centerY - 20);
+                ctx.fillText('com Estoque', centerX, centerY + 20);
+                return;
+            }
+
+            // Fixed 12 Slices
+            const sliceCount = 12;
+            const sliceAngle = (2 * Math.PI) / sliceCount;
+            
+            let startAngle = currentRotation; 
+
+            for (let i = 0; i < sliceCount; i++) {
+                const p = activeProducts[i % activeProducts.length];
+                const endAngle = startAngle + sliceAngle;
+
+                // Draw Slice
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                
+                // Find original index for color consistency
+                const originalIndex = products.indexOf(p);
+                ctx.fillStyle = colors[originalIndex % colors.length];
+                ctx.fill();
+                ctx.stroke();
+
+                // Draw Text
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(startAngle + sliceAngle / 2);
+                ctx.textAlign = "right";
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 16px sans-serif";
+                ctx.shadowColor = "rgba(0,0,0,0.5)";
+                ctx.shadowBlur = 4;
+                ctx.fillText(p.name, radius - 20, 5);
+                ctx.restore();
+
+                startAngle = endAngle;
+            }
+        }
+
+        // --- Spin Logic ---
+        document.getElementById('spinBtn').addEventListener('click', spin);
+
+        function spin() {
+            if (isSpinning) return;
+            
+            const activeProducts = products.filter(p => p.qty > 0);
+            if (activeProducts.length === 0) {
+                alert("Não há produtos com estoque para sortear.");
+                return;
+            }
+
+            isSpinning = true;
+            document.getElementById('spinBtn').disabled = true;
+            document.getElementById('statusMessage').innerText = "A roleta está girando...";
+
+            // 1. Determine Winner based on weights
+            const totalWeight = activeProducts.reduce((sum, p) => sum + p.chance, 0);
+            let random = Math.random() * totalWeight;
+            let winner = null;
+            let weightSum = 0;
+            let winnerIndexInActive = 0;
+
+            for (let i = 0; i < activeProducts.length; i++) {
+                weightSum += activeProducts[i].chance;
+                if (random <= weightSum) {
+                    winner = activeProducts[i];
+                    winnerIndexInActive = i;
+                    break;
+                }
+            }
+
+            // 2. Calculate Target Angle
+            // We need to land in the middle of the winner's segment.
+            // The pointer is at -90 degrees (Top, 12 o'clock) in Canvas logic usually 0 is 3 o'clock.
+            // But our draw loop starts at `currentRotation`.
+            // Let's simplify: We want the final rotation to align the winner segment to the top.
+            
+            // Calculate where the winner segment starts and ends relative to 0 (start of list)
+            const sliceCount = 12;
+            const sliceAngle = (2 * Math.PI) / sliceCount;
+            
+            // Find all slices that belong to the winner
+            const winnerIndices = [];
+            for(let i = 0; i < sliceCount; i++) {
+                if (activeProducts[i % activeProducts.length] === winner) {
+                    winnerIndices.push(i);
+                }
+            }
+            
+            // Pick a random slice occurrence to land on
+            const targetSliceIndex = winnerIndices[Math.floor(Math.random() * winnerIndices.length)];
+            
+            const winnerCenterAngle = (targetSliceIndex * sliceAngle) + (sliceAngle / 2);
+
+            // The pointer is at 270deg (3*PI/2) or -90deg (-PI/2) in standard circle.
+            // To align winnerCenterAngle to -PI/2, we need to rotate the whole wheel.
+            // Target Rotation = (Correction to Top) - (Winner Center relative to 0)
+            const correctionToTop = -Math.PI / 2; 
+            
+            // We want to add multiple full spins
+            const minDuration = 10000; // 10s
+            const maxDuration = 20000; // 20s
+            const duration = Math.random() * (maxDuration - minDuration) + minDuration;
+            
+            // Calculate number of spins roughly based on duration to look fast
+            // e.g. 10 rotations
+            const fullSpins = 10 + Math.floor(Math.random() * 5); 
+            const spinAngle = fullSpins * 2 * Math.PI;
+
+            // Current rotation modulo 2PI to get base
+            const currentBase = currentRotation % (2 * Math.PI);
+            
+            // Calculate the delta needed to land exactly there
+            // We want finalRotation % 2PI to place the winner at top.
+            // Actually, it's easier to just animate a huge delta and check where we land? 
+            // No, for a rigged/determined winner, we calculate exact destination.
+            
+            // Destination: We want the specific segment to be at -PI/2.
+            // If we rotate the canvas by R, the segment originally at A ends up at A + R.
+            // We want A + R = -PI/2 (mod 2PI).
+            // => R = -PI/2 - A.
+            
+            let targetRotation = correctionToTop - winnerCenterAngle;
+            
+            // Adjust target to be always increasing (positive spin) and far in future
+            while (targetRotation < currentRotation + spinAngle) {
+                targetRotation += 2 * Math.PI;
+            }
+
+            // Start Animation
+            const startTime = performance.now();
+            const startRotation = currentRotation;
+            const changeInRotation = targetRotation - startRotation;
+
+            function animate(currentTime) {
+                const elapsed = currentTime - startTime;
+                
+                if (elapsed < duration) {
+                    // Ease Out Quart or Quint for nice slowdown
+                    // t: current time, b: start value, c: change in value, d: duration
+                    const t = elapsed;
+                    const b = startRotation;
+                    const c = changeInRotation;
+                    const d = duration;
+                    
+                    // Ease In Out Cubic
+                    // currentRotation = easeInOutCubic(t, b, c, d);
+                    
+                    // Custom ease for wheel: Fast start, very long slow tail
+                    currentRotation = easeOutQuint(t, b, c, d);
+
+                    drawWheel();
+                    requestAnimationFrame(animate);
+                } else {
+                    // Finish
+                    currentRotation = targetRotation;
+                    drawWheel();
+                    isSpinning = false;
+                    document.getElementById('spinBtn').disabled = false;
+                    document.getElementById('statusMessage').innerText = "";
+                    handleWin(winner);
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Easing function: Ease Out Quint (starts fast, slows down gently)
+        function easeOutQuint(t, b, c, d) {
+            t /= d;
+            t--;
+            return c * (t * t * t * t * t + 1) + b;
+        }
+
+        function handleWin(product) {
+            // Update Stock
+            const originalIndex = products.indexOf(product);
+            if (originalIndex > -1) {
+                products[originalIndex].qty -= 1;
+                saveData(); // Updates cookie and UI
+            }
+
+            // Show Modal
+            const modal = document.getElementById('resultModal');
+            const content = document.getElementById('modalContent');
+            document.getElementById('winnerName').innerText = product.name;
+            
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Small delay for animation
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                content.classList.remove('scale-90');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('resultModal');
+            const content = document.getElementById('modalContent');
+            
+            modal.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-90');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }, 300);
+        }
+
+    </script>
+</body>
+</html>
