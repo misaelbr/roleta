@@ -70,7 +70,7 @@
     <main class="flex-grow container mx-auto p-4 lg:p-8 flex flex-col lg:flex-row gap-8">
         
         <!-- Left Column: The Wheel -->
-        <div class="w-full lg:w-7/12 flex flex-col items-center justify-center bg-dark-800 rounded-2xl p-6 shadow-xl border border-dark-700 relative overflow-hidden">
+        <div id="wheelPanel" class="w-full lg:w-7/12 flex flex-col items-center justify-center bg-dark-800 rounded-2xl p-6 shadow-xl border border-dark-700 relative overflow-hidden transition-all duration-300">
             
             <div class="relative group">
                 <!-- Pointer -->
@@ -94,7 +94,7 @@
         </div>
 
         <!-- Right Column: Controls & Data -->
-        <div class="w-full lg:w-5/12 flex flex-col gap-6">
+        <div id="controlsPanel" class="w-full lg:w-5/12 flex flex-col gap-6 transition-all duration-300">
             
             <!-- Form -->
             <div class="bg-dark-800 rounded-2xl p-6 shadow-xl border border-dark-700">
@@ -114,7 +114,7 @@
                             <input type="number" id="prodChance" min="1" max="100" required class="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 focus:outline-none focus:border-accent-500 transition text-slate-200" placeholder="25">
                         </div>
                     </div>
-                    <button type="submit" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition">
+                    <button type="submit" id="submitBtn" class="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition">
                         Adicionar à Lista
                     </button>
                 </form>
@@ -150,6 +150,13 @@
         </div>
     </div>
 
+    <!-- Toggle Button (Bottom Right) -->
+    <button onclick="toggleControls()" class="fixed bottom-4 right-4 w-12 h-12 bg-transparent text-slate-700/20 hover:text-accent-500 transition-all duration-300 flex items-center justify-center rounded-full z-50 cursor-pointer" title="Alternar Visualização">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+    </button>
+
     <script>
         // --- Storage Management ---
         const STORAGE_KEY = 'roleta_produtos_v1';
@@ -157,6 +164,7 @@
         // --- State Management ---
         let products = [];
         let isSpinning = false;
+        let editingIndex = -1;
         
         // Colors for wheel segments (Soft/Dark palette)
         const colors = [
@@ -175,7 +183,36 @@
             loadData();
             drawWheel();
             updateUI();
+            
+            // Keyboard Shortcut: Ctrl + Alt + F
+            window.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.altKey && (e.key === 'f' || e.key === 'F')) {
+                    e.preventDefault();
+                    toggleControls();
+                }
+            });
         };
+
+        function toggleControls() {
+            const controls = document.getElementById('controlsPanel');
+            const wheel = document.getElementById('wheelPanel');
+            
+            if (controls.classList.contains('hidden')) {
+                controls.classList.remove('hidden');
+                controls.classList.add('flex');
+                // Reset wheel width
+                wheel.classList.remove('w-full');
+                wheel.classList.add('lg:w-7/12');
+            } else {
+                controls.classList.add('hidden');
+                controls.classList.remove('flex');
+                // Expand wheel
+                wheel.classList.remove('lg:w-7/12');
+                wheel.classList.add('w-full');
+            }
+            // Redraw to adjust canvas if needed (though canvas size is fixed, layout changes)
+            setTimeout(drawWheel, 300);
+        }
 
         function loadData() {
             const data = localStorage.getItem(STORAGE_KEY);
@@ -230,7 +267,12 @@
                         </div>
                         <div class="flex items-center gap-3">
                             <span class="text-sm font-mono text-accent-500">${p.chance}%</span>
-                            <button onclick="removeProduct(${index})" class="text-slate-600 hover:text-red-500 transition">
+                            <button onclick="editProduct(${index})" class="text-slate-600 hover:text-accent-500 transition" title="Editar">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                            </button>
+                            <button onclick="removeProduct(${index})" class="text-slate-600 hover:text-red-500 transition" title="Remover">
                                 &times;
                             </button>
                         </div>
@@ -255,15 +297,46 @@
             const chance = parseFloat(document.getElementById('prodChance').value);
 
             if (name && qty > 0 && chance > 0) {
-                products.push({ name, qty, chance });
+                if (editingIndex > -1) {
+                    // Update existing
+                    products[editingIndex] = { name, qty, chance };
+                    editingIndex = -1;
+                    document.getElementById('submitBtn').innerText = "Adicionar à Lista";
+                    document.getElementById('submitBtn').classList.remove('bg-accent-600', 'hover:bg-accent-500');
+                    document.getElementById('submitBtn').classList.add('bg-slate-700', 'hover:bg-slate-600');
+                } else {
+                    // Add new
+                    products.push({ name, qty, chance });
+                }
                 saveData();
                 e.target.reset();
             }
         });
 
+        function editProduct(index) {
+            if (isSpinning) return;
+            const p = products[index];
+            document.getElementById('prodName').value = p.name;
+            document.getElementById('prodQty').value = p.qty;
+            document.getElementById('prodChance').value = p.chance;
+            
+            editingIndex = index;
+            const btn = document.getElementById('submitBtn');
+            btn.innerText = "Salvar Alterações";
+            btn.classList.remove('bg-slate-700', 'hover:bg-slate-600');
+            btn.classList.add('bg-accent-600', 'hover:bg-accent-500');
+        }
+
         function removeProduct(index) {
             if (isSpinning) return;
+            if (editingIndex === index) {
+                alert("Não é possível remover um item que está sendo editado.");
+                return;
+            }
             products.splice(index, 1);
+            // Adjust editing index if needed
+            if (editingIndex > index) editingIndex--;
+            
             saveData();
         }
 
